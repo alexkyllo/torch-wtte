@@ -1,0 +1,29 @@
+[[source]]
+url = "https://pypi.org/simple"
+verify_ssl = true
+name = "pypi"
+
+[packages]
+torch = "*"
+numpy = "*"
+
+[dev-packages]
+flake8 = "*"
+autopep8 = "*"
+pycodestyle = "*"
+pydocstyle = "*"
+jedi = "*"
+rope = "*"
+yapf = "*"
+pyflakes = "*"
+pylint = "*"
+jupyter = "*"
+black = "*"
+python-lsp-server = {extras = ["all"], version = "*"}
+ipykernel = "*"
+
+[requires]
+python_version = "3.9"
+
+[pipenv]
+allow_prereleases = true
