@@ -9,20 +9,20 @@ from torch import nn
 EPS = torch.finfo(torch.float32).eps
 
 
-def log_likelihood_discrete(y, u, a, b, epsilon=EPS):
+def log_likelihood_discrete(tte, uncensored, alpha, beta, epsilon=EPS):
     """Discrete version of log likelihood for the Weibull TTE loss function.
 
     Parameters
     ----------
-    y : torch.tensor
+    tte : torch.tensor
         tensor of each subject's time to event at each time step.
-    u : torch.tensor
+    uncensored : torch.tensor
         tensor indicating whether each data point is censored (0) or
         not (1)
-    a : torch.tensor
+    alpha : torch.tensor
         Estimated Weibull distribution scale parameter per subject,
         per time step.
-    b : torch.tensor
+    beta : torch.tensor
         Estimated Weibull distribution shape parameter per subject,
         per time step.
 
@@ -32,25 +32,25 @@ def log_likelihood_discrete(y, u, a, b, epsilon=EPS):
 
     """
 
-    hazard_0 = torch.pow((y + epsilon) / a, b)
-    hazard_1 = torch.pow((y + 1.0) / a, b)
-    return u * torch.log(torch.exp(hazard_1 - hazard_0) - (1.0 - epsilon)) - hazard_1
+    hazard_0 = torch.pow((tte + epsilon) / alpha, beta)
+    hazard_1 = torch.pow((tte + 1.0) / alpha, beta)
+    return uncensored * torch.log(torch.exp(hazard_1 - hazard_0) - (1.0 - epsilon)) - hazard_1
 
 
-def log_likelihood_continuous(y, u, a, b, epsilon=EPS):
+def log_likelihood_continuous(tte, uncensored, alpha, beta, epsilon=EPS):
     """Continuous version of log likelihood for the Weibull TTE loss function.
 
     Parameters
     ----------
-    y : torch.tensor
+    tte : torch.tensor
         tensor of each subject's time to event at each time step.
-    u : torch.tensor
+    uncensored : torch.tensor
         tensor indicating whether each data point is censored (0) or
         not (1)
-    a : torch.tensor
+    alpha : torch.tensor
         Estimated Weibull distribution scale parameter per subject,
         per time step.
-    b : torch.tensor
+    beta : torch.tensor
         Estimated Weibull distribution shape parameter per subject,
         per time step.
 
@@ -59,15 +59,15 @@ def log_likelihood_continuous(y, u, a, b, epsilon=EPS):
     FIXME: Add docs.
 
     """
-    y_a = (y + epsilon) / a
-    return u * (torch.log(b) + b * torch.log(y_a)) - torch.pow(y_a, b)
+    y_a = (tte + epsilon) / alpha
+    return uncensored * (torch.log(beta) + beta * torch.log(y_a)) - torch.pow(y_a, beta)
 
 
 def weibull_censored_nll_loss(
-    y: torch.tensor,
-    u: torch.tensor,
-    a: torch.tensor,
-    b: torch.tensor,
+    tte: torch.tensor,
+    uncensored: torch.tensor,
+    alpha: torch.tensor,
+    beta: torch.tensor,
     discrete: bool = False,
     reduction: str = "mean",
 ):
@@ -78,27 +78,27 @@ def weibull_censored_nll_loss(
 
     Parameters
     ----------
-    y : torch.tensor
+    tte : torch.tensor
         tensor of each subject's time to event at each time step.
-    u : torch.tensor
+    uncensored : torch.tensor
         tensor indicating whether each data point is censored (0) or
         not (1)
-    a : torch.tensor
+    alpha : torch.tensor
         Estimated Weibull distribution scale parameter per subject,
         per time step.
-    b : torch.tensor
+    beta : torch.tensor
         Estimated Weibull distribution shape parameter per subject,
         per time step.
     """
     reducer = {"mean": torch.mean, "sum": torch.sum}.get(reduction)
     likelihood = log_likelihood_discrete if discrete else log_likelihood_continuous
-    log_likelihoods = likelihood(y, u, a, b)
+    log_likelihoods = likelihood(tte, uncensored, alpha, beta)
     if reducer:
         log_likelihoods = reducer(log_likelihoods, dim=-1)
     return -1.0 * log_likelihoods
 
 
-class WeibullCensoredNLLLoss(nn.NLLLoss):
+class WeibullCensoredNLLLoss(nn.Module):
     """A negative log-likelihood loss function for Weibull distribution
     parameter estimation with right censoring.
     """
@@ -123,16 +123,16 @@ class WeibullCensoredNLLLoss(nn.NLLLoss):
              override reduction. Default: 'mean'
 
         """
-        super().__init__(reduction=reduction)
+        super().__init__()
         self.discrete = discrete
         self.reduction = reduction
 
     def forward(
         self,
-        y: torch.tensor,
-        u: torch.tensor,
-        a: torch.tensor,
-        b: torch.tensor,
+        tte: torch.tensor,
+        uncensored: torch.tensor,
+        alpha: torch.tensor,
+        beta: torch.tensor,
     ):
         """Compute the loss.
 
@@ -141,16 +141,54 @@ class WeibullCensoredNLLLoss(nn.NLLLoss):
 
         Parameters
         ----------
-        y : torch.tensor
+        tte : torch.tensor
             tensor of each subject's time to event at each time step.
-        u : torch.tensor
+        uncensored : torch.tensor
             tensor indicating whether each data point is censored (0) or
             not (1)
-        a : torch.tensor
+        alpha : torch.tensor
             Estimated Weibull distribution scale parameter per subject,
             per time step.
-        b : torch.tensor
+        beta : torch.tensor
             Estimated Weibull distribution shape parameter per subject,
             per time step.
         """
-        return weibull_censored_nll_loss(y, u, a, b, self.discrete, self.reduction)
+        return weibull_censored_nll_loss(
+            tte, uncensored, alpha, beta, self.discrete, self.reduction
+        )
+
+
+class WeibullActivation(nn.Module):
+    """Layer that initializes, activates and regularizes alpha and beta parameters of
+    a Weibull distribution."""
+
+    def __init__(self, init_alpha: float = 1.0, max_beta: float = 5.0, epsilon: float = EPS):
+        super().__init__()
+        self.init_alpha = init_alpha
+        self.max_beta = max_beta
+        self.epsilon = epsilon
+
+    def forward(self, x: torch.tensor):
+        """Compute the activation function.
+
+        Parameters
+        ----------
+        x : torch.tensor
+            An input tensor with innermost dimension = 2 ([alpha,
+            beta])
+        """
+
+        alpha = x[..., 0]
+        beta = x[..., 1]
+
+        alpha = self.init_alpha * torch.exp(alpha)
+
+        if self.max_beta > 1.05:
+            shift = torch.log(self.max_beta - 1.0)
+            beta = beta - shift
+
+        beta = self.max_beta * torch.clamp(
+            torch.sigmoid(beta), min=self.epsilon, max=1.0 - self.epsilon
+        )
+
+        return torch.stack([alpha, beta], axis=-1)
