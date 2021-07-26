@@ -22,6 +22,8 @@ black = "*"
 python-lsp-server = {extras = ["all"], version = "*"}
 ipykernel = "*"
 pytest = "*"
+matplotlib = "*"
+nbconvert = "*"
 
 [requires]
 python_version = "3.9"

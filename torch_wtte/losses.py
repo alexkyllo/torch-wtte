@@ -2,7 +2,7 @@
 
 Weibull Time-To-Event loss functions for PyTorch.
 """
-
+from math import log
 import torch
 from torch import nn
 
@@ -70,6 +70,7 @@ def weibull_censored_nll_loss(
     beta: torch.tensor,
     discrete: bool = False,
     reduction: str = "mean",
+    clip_prob=1e-6,
 ):
     """Compute the loss.
 
@@ -89,12 +90,16 @@ def weibull_censored_nll_loss(
     beta : torch.tensor
         Estimated Weibull distribution shape parameter per subject,
         per time step.
+    clip_prob: float
+        Clip likelihood to to [log(clip_prob),log(1-clip_prob)]
     """
     reducer = {"mean": torch.mean, "sum": torch.sum}.get(reduction)
     likelihood = log_likelihood_discrete if discrete else log_likelihood_continuous
     log_likelihoods = likelihood(tte, uncensored, alpha, beta)
     if reducer:
         log_likelihoods = reducer(log_likelihoods, dim=-1)
+    if clip_prob is not None:
+        log_likelihoods = torch.clamp(log_likelihoods, log(clip_prob), log(1 - clip_prob))
     return -1.0 * log_likelihoods
 
 
@@ -103,7 +108,7 @@ class WeibullCensoredNLLLoss(nn.Module):
     parameter estimation with right censoring.
     """
 
-    def __init__(self, discrete: bool = False, reduction: str = "mean"):
+    def __init__(self, discrete: bool = False, reduction: str = "mean", clip_prob=1e-6):
         """Constructor.
 
         Construct the Weibull censored negative log-likelihood loss object.
@@ -121,11 +126,14 @@ class WeibullCensoredNLLLoss(nn.Module):
              are in the process of being deprecated, and in the
              meantime, specifying either of those two args will
              override reduction. Default: 'mean'
+        clip_prob: float
+             Clip likelihood to to [log(clip_prob),log(1-clip_prob)]
 
         """
         super().__init__()
         self.discrete = discrete
         self.reduction = reduction
+        self.clip_prob = clip_prob
 
     def forward(
         self,
@@ -154,7 +162,7 @@ class WeibullCensoredNLLLoss(nn.Module):
             per time step.
         """
         return weibull_censored_nll_loss(
-            tte, uncensored, alpha, beta, self.discrete, self.reduction
+            tte, uncensored, alpha, beta, self.discrete, self.reduction, self.clip_prob
         )
 
 
@@ -164,8 +172,8 @@ class WeibullActivation(nn.Module):
 
     def __init__(self, init_alpha: float = 1.0, max_beta: float = 5.0, epsilon: float = EPS):
         super().__init__()
-        self.init_alpha = init_alpha
-        self.max_beta = max_beta
+        self.init_alpha = torch.tensor(init_alpha)
+        self.max_beta = torch.tensor(max_beta)
         self.epsilon = epsilon
 
     def forward(self, x: torch.tensor):
