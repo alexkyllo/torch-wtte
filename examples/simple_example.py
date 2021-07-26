@@ -34,7 +34,7 @@ from torch import nn, optim
 from torch.utils.data import TensorDataset, DataLoader
 import matplotlib.pyplot as plt
 
-sys.path.append(".")
+sys.path.append("..")
 from torch_wtte import losses
 
 np.random.seed(11)
