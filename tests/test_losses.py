@@ -58,10 +58,9 @@ def test_loss_fn():
     uncensored = torch.tensor([[1, 1, 1, 1, 0], [1, 1, 1, 1, 1]])
     alpha = torch.tensor([[0.9, 0.9, 0.9, 0.9, 0.9], [0.99, 0.99, 0.99, 0.99, 0.99]])
     beta = torch.tensor([[0.9, 0.9, 0.9, 0.9, 0.9], [1.1, 1.1, 1.1, 1.1, 1.1]])
-    loss_values = losses.weibull_censored_nll_loss(
-        tte, uncensored, alpha, beta, discrete=True, reduction=None
-    )
-    print(loss_values)
+    inputs = torch.stack([alpha, beta], axis=-1)
+    target = torch.stack([tte, uncensored], axis=-1)
+    loss_values = losses.weibull_censored_nll_loss(inputs, target, discrete=True, reduction=None)
     # results from wtte-rnn package
     expected = torch.tensor(
         [

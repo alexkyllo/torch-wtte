@@ -1,0 +1,30 @@
+[tool.poetry]
+name = "torch-wtte"
+version = "0.1.0"
+description = "A PyTorch implementation of Weibull Time to Event Recurrent Neural Networks for churn prediction tasks."
+authors = ["Alex Kyllo <alex.kyllo@gmail.com>"]
+license = "MIT"
+
+[tool.poetry.dependencies]
+python = "^3.8"
+torch = "^1.9.0"
+numpy = "^1.21.1"
+
+[tool.poetry.dev-dependencies]
+black = "^21.7b0"
+pytest = "^6.2.4"
+flake8 = "^3.9.2"
+pylint = "^2.9.5"
+jedi = "^0.18.0"
+rope = "^0.19.0"
+matplotlib = "^3.4.2"
+ipykernel = "^6.0.3"
+jupytext = "^1.11.4"
+jupyter = "^1.0.0"
+nbconvert = "^6.1.0"
+python-lsp-server = {extras = ["all"], version = "^1.1.0"}
+pycodestyle = "^2.7.0"
+
+[build-system]
+requires = ["poetry-core>=1.0.0"]
+build-backend = "poetry.core.masonry.api"

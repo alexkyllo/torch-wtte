@@ -64,10 +64,8 @@ def log_likelihood_continuous(tte, uncensored, alpha, beta, epsilon=EPS):
 
 
 def weibull_censored_nll_loss(
-    tte: torch.tensor,
-    uncensored: torch.tensor,
-    alpha: torch.tensor,
-    beta: torch.tensor,
+    inputs: torch.tensor,
+    targets: torch.tensor,
     discrete: bool = False,
     reduction: str = "mean",
     clip_prob=1e-6,
@@ -79,20 +77,20 @@ def weibull_censored_nll_loss(
 
     Parameters
     ----------
-    tte : torch.tensor
-        tensor of each subject's time to event at each time step.
-    uncensored : torch.tensor
-        tensor indicating whether each data point is censored (0) or
+    inputs : torch.tensor
+        Estimated Weibull distribution scale (alpha) and shape (beta)
+        parameter per subject, per time step.
+    targets : torch.tensor
+        Tensor of each subject's time to event at each time step and
+        flag indicating whether each data point is censored (0) or
         not (1)
-    alpha : torch.tensor
-        Estimated Weibull distribution scale parameter per subject,
-        per time step.
-    beta : torch.tensor
-        Estimated Weibull distribution shape parameter per subject,
-        per time step.
     clip_prob: float
         Clip likelihood to to [log(clip_prob),log(1-clip_prob)]
     """
+    alpha = inputs[..., 0]
+    beta = inputs[..., 1]
+    tte = targets[..., 0]
+    uncensored = targets[..., 1]
     reducer = {"mean": torch.mean, "sum": torch.sum}.get(reduction)
     likelihood = log_likelihood_discrete if discrete else log_likelihood_continuous
     log_likelihoods = likelihood(tte, uncensored, alpha, beta)
@@ -137,10 +135,8 @@ class WeibullCensoredNLLLoss(nn.Module):
 
     def forward(
         self,
-        tte: torch.tensor,
-        uncensored: torch.tensor,
-        alpha: torch.tensor,
-        beta: torch.tensor,
+        inputs: torch.tensor,
+        target: torch.tensor,
     ):
         """Compute the loss.
 
@@ -149,20 +145,16 @@ class WeibullCensoredNLLLoss(nn.Module):
 
         Parameters
         ----------
-        tte : torch.tensor
-            tensor of each subject's time to event at each time step.
-        uncensored : torch.tensor
-            tensor indicating whether each data point is censored (0) or
+        inputs : torch.tensor
+            Estimated Weibull distribution scale (alpha) and shape (beta)
+            parameter per subject, per time step.
+        targets : torch.tensor
+            Tensor of each subject's time to event at each time step and
+            flag indicating whether each data point is censored (0) or
             not (1)
-        alpha : torch.tensor
-            Estimated Weibull distribution scale parameter per subject,
-            per time step.
-        beta : torch.tensor
-            Estimated Weibull distribution shape parameter per subject,
-            per time step.
         """
         return weibull_censored_nll_loss(
-            tte, uncensored, alpha, beta, self.discrete, self.reduction, self.clip_prob
+            inputs, target, self.discrete, self.reduction, self.clip_prob
         )
 
 

@@ -241,11 +241,7 @@ class WTTERNN(nn.Module):
             data, labels = data.to(device), labels.to(device)
             optimizer.zero_grad()
             output = self(data).squeeze()
-            tte = labels[..., 0]
-            uncensored = labels[..., 1]
-            alpha = output[..., 0]
-            beta = output[..., 1]
-            loss = self.criterion(tte, uncensored, alpha, beta).sum()
+            loss = self.criterion(output, labels).sum()
             loss.backward()
             optimizer.step()
             train_losses.append(loss.item())
